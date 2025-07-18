@@ -22,7 +22,10 @@ pub mod tls;
 #[cfg(not(feature = "any_tls"))]
 pub use crate::tls::listeners as tls;
 
-use crate::protocols::{l4::socket::SocketAddr, tls::TlsRef, Stream};
+use crate::{
+    listeners::tls::TlsCert,
+    protocols::{l4::socket::SocketAddr, tls::TlsRef, Stream},
+};
 
 #[cfg(unix)]
 use crate::server::ListenFds;
@@ -158,9 +161,9 @@ impl Listeners {
     /// and path to the certificate/private key pairs.
     /// This endpoint will adopt the [Mozilla Intermediate](https://wiki.mozilla.org/Security/Server_Side_TLS#Intermediate_compatibility_.28recommended.29)
     /// server side TLS settings.
-    pub fn tls(addr: &str, cert_path: &str, key_path: &str) -> Result<Self> {
+    pub fn tls(addr: &str, tls_cert: TlsCert) -> Result<Self> {
         let mut listeners = Self::new();
-        listeners.add_tls(addr, cert_path, key_path)?;
+        listeners.add_tls(addr, tls_cert)?;
         Ok(listeners)
     }
 
@@ -182,8 +185,8 @@ impl Listeners {
 
     /// Add a TLS endpoint to `self` with the [Mozilla Intermediate](https://wiki.mozilla.org/Security/Server_Side_TLS#Intermediate_compatibility_.28recommended.29)
     /// server side TLS settings.
-    pub fn add_tls(&mut self, addr: &str, cert_path: &str, key_path: &str) -> Result<()> {
-        self.add_tls_with_settings(addr, None, TlsSettings::intermediate(cert_path, key_path)?);
+    pub fn add_tls(&mut self, addr: &str, tls_cert: TlsCert) -> Result<()> {
+        self.add_tls_with_settings(addr, None, TlsSettings::intermediate(tls_cert)?);
         Ok(())
     }
 
