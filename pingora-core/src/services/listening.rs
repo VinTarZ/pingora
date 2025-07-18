@@ -19,7 +19,7 @@
 //! more endpoints to listen to.
 
 use crate::apps::ServerApp;
-use crate::listeners::tls::TlsSettings;
+use crate::listeners::tls::{TlsCert, TlsSettings};
 use crate::listeners::{Listeners, ServerAddress, TcpSocketOptions, TransportStack};
 use crate::protocols::Stream;
 #[cfg(unix)]
@@ -94,8 +94,8 @@ impl<A> Service<A> {
     }
 
     /// Add a TLS listening endpoint with the given certificate and key paths.
-    pub fn add_tls(&mut self, addr: &str, cert_path: &str, key_path: &str) -> Result<()> {
-        self.listeners.add_tls(addr, cert_path, key_path)
+    pub fn add_tls(&mut self, addr: &str, tls_cert: TlsCert) -> Result<()> {
+        self.listeners.add_tls(addr, tls_cert)
     }
 
     /// Add a TLS listening endpoint with the given [`TlsSettings`] and [`TcpSocketOptions`].

@@ -20,6 +20,7 @@ use log::debug;
 use pingora_error::ErrorType::InternalError;
 use pingora_error::{Error, OrErr, Result};
 use pingora_rustls::load_certs_and_key_files;
+use pingora_rustls::rustls::server::ResolvesServerCert;
 use pingora_rustls::ServerConfig;
 use pingora_rustls::{version, TlsAcceptor as RusTlsAcceptor};
 
@@ -28,8 +29,13 @@ use crate::protocols::{ALPN, IO};
 /// The TLS settings of a listening endpoint
 pub struct TlsSettings {
     alpn_protocols: Option<Vec<Vec<u8>>>,
-    cert_path: String,
-    key_path: String,
+    tls_cert: TlsCert,
+}
+
+#[non_exhaustive]
+pub enum TlsCert {
+    Resolver(Arc<dyn ResolvesServerCert>),
+    SingleCert { cert_path: String, key_path: String },
 }
 
 pub struct Acceptor {
@@ -46,23 +52,32 @@ impl TlsSettings {
     ///
     /// Todo: Return a result instead of panicking XD
     pub fn build(self) -> Acceptor {
-        let Ok(Some((certs, key))) = load_certs_and_key_files(&self.cert_path, &self.key_path)
-        else {
-            panic!(
-                "Failed to load provided certificates \"{}\" or key \"{}\".",
-                self.cert_path, self.key_path
-            )
-        };
-
         // TODO - Add support for client auth & custom CA support
-        let mut config =
+        let builder =
             ServerConfig::builder_with_protocol_versions(&[&version::TLS12, &version::TLS13])
-                .with_no_client_auth()
-                .with_single_cert(certs, key)
-                .explain_err(InternalError, |e| {
-                    format!("Failed to create server listener config: {e}")
-                })
-                .unwrap();
+                .with_no_client_auth();
+
+        let mut config = match self.tls_cert {
+            TlsCert::Resolver(cert_resolver) => builder.with_cert_resolver(cert_resolver),
+            TlsCert::SingleCert {
+                cert_path,
+                key_path,
+            } => {
+                let Ok(Some((certs, key))) = load_certs_and_key_files(&cert_path, &key_path) else {
+                    panic!(
+                        "Failed to load provided certificates \"{}\" or key \"{}\".",
+                        cert_path, key_path
+                    )
+                };
+
+                builder
+                    .with_single_cert(certs, key)
+                    .explain_err(InternalError, |e| {
+                        format!("Failed to create server listener config: {e}")
+                    })
+                    .unwrap()
+            }
+        };
 
         if let Some(alpn_protocols) = self.alpn_protocols {
             config.alpn_protocols = alpn_protocols;
@@ -84,14 +99,13 @@ impl TlsSettings {
         self.alpn_protocols = Some(alpn.to_wire_protocols());
     }
 
-    pub fn intermediate(cert_path: &str, key_path: &str) -> Result<Self>
+    pub fn intermediate(tls_cert: TlsCert) -> Result<Self>
     where
         Self: Sized,
     {
         Ok(TlsSettings {
             alpn_protocols: None,
-            cert_path: cert_path.to_string(),
-            key_path: key_path.to_string(),
+            tls_cert,
         })
     }
 
